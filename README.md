@@ -22,7 +22,7 @@ open "CVM Control.app"
 On first connect, allow local network access when macOS asks.
 
 ## Command reference
-From the CVM Owners Manual (`CVM.pdf`, page 14):
+From the Stewart CVM Owners Manual, page 14:
 
 | Command | Function |
 |---|---|
