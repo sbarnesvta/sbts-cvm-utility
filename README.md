@@ -3,8 +3,9 @@
 A native macOS app for controlling a Stewart Filmscreen CVM masking/screen controller over Telnet (IP).
 
 ## Features
-- IP address, port (default 23), and optional Telnet login (auto-sent when prompted); settings are remembered
-- Per-channel motor control (A–B or A–D): Up / Stop / Down
+- IP address, port (default 23), and Telnet login (auto-sent when prompted); settings are remembered
+- Keepalive while idle and automatic reconnect if the CVM drops the session
+- Per-channel motor control (A–B or A–D): Up / Stop / Down, or go directly to a position (%)
 - Stop All and Retract All (Home)
 - Recall and Store presets 1–24 (store asks for confirmation)
 - Position queries per channel or all at once, with optional 2-second auto-refresh
@@ -21,6 +22,13 @@ open "CVM Control.app"
 
 On first connect, allow local network access when macOS asks.
 
+## Telnet login
+The CVM asks for a login on port 23 (`User:` then `Password:`). The factory defaults are
+**User `Telnet 1` / Password `Password 1`** (also `Telnet 2`–`4` / `Password 2`–`4`), and the app
+fills these in by default. Both are case-sensitive and include the space. You can change them in the
+CVM's web page (`http://<CVM IP>` → TELNET); if you do, enter the new ones in the app. The ↺ button
+next to the password field restores the defaults.
+
 ## Command reference
 From the Stewart CVM Owners Manual, page 14:
 
@@ -34,3 +42,4 @@ From the Stewart CVM Owners Manual, page 14:
 | `#1.1.0.MOTOR=STORE,X;` | Store current position as preset X (1–24) |
 | `#1.1.0.MOTOR=RETRACT;` | All motors to Home |
 | `#1.1.N.MOTOR.POSITION=?;` | Query channel N position (%) |
+| `#1.1.N.MOTOR=GOTO,P;` | Move channel N to P % (0–100) — *not in the manual; verified on a CVM* |

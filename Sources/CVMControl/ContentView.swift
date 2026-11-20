@@ -6,14 +6,15 @@ struct ContentView: View {
 
     @AppStorage("host") private var host = ""
     @AppStorage("port") private var port = 23
-    @AppStorage("username") private var username = ""
-    @AppStorage("password") private var password = ""
+    @AppStorage("username") private var username = CVM.defaultUsername
+    @AppStorage("password") private var password = CVM.defaultPassword
     @AppStorage("lineEnding") private var lineEnding = "\r"
     @AppStorage("channelCount") private var channelCount = 2
 
     @State private var storeMode = false
     @State private var pendingStore: Int?
     @State private var rawCommand = ""
+    @State private var targets: [Int: String] = [:]   // channel -> typed target %
     @State private var autoPoll = false
     @State private var pollTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
@@ -38,7 +39,14 @@ struct ContentView: View {
             if autoPoll && client.state == .connected { queryAll() }
         }
         .onChange(of: lineEnding) { _, v in client.lineEnding = v }
-        .onAppear { client.lineEnding = lineEnding }
+        .onAppear {
+            client.lineEnding = lineEnding
+            // Older versions saved an empty login; fill in the CVM factory default.
+            if username.isEmpty && password.isEmpty {
+                username = CVM.defaultUsername
+                password = CVM.defaultPassword
+            }
+        }
         .confirmationDialog("Store current position as Preset \(pendingStore ?? 0)?",
                             isPresented: Binding(get: { pendingStore != nil }, set: { if !$0 { pendingStore = nil } })) {
             Button("Store Preset \(pendingStore ?? 0)", role: .destructive) {
@@ -64,12 +72,20 @@ struct ContentView: View {
             TextField("Port", value: $port, format: .number.grouping(.never))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 60)
-            TextField("User (optional)", text: $username)
+            TextField("User", text: $username)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
+                .help("CVM Telnet user. Factory default: \(CVM.defaultUsername) (also Telnet 2–4)")
             SecureField("Password", text: $password)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 110)
+                .help("CVM Telnet password. Factory default: \(CVM.defaultPassword)")
+            Button {
+                username = CVM.defaultUsername
+                password = CVM.defaultPassword
+            } label: { Image(systemName: "arrow.counterclockwise") }
+                .buttonStyle(.borderless)
+                .help("Reset login to factory default (\(CVM.defaultUsername) / \(CVM.defaultPassword))")
             Picker("", selection: $lineEnding) {
                 Text("CR").tag("\r")
                 Text("CR+LF").tag("\r\n")
@@ -116,8 +132,8 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 160)
                     Spacer()
-                    Button { client.send(CVM.retract) } label: { Label("Retract All (Home)", systemImage: "house") }
-                    Button(role: .destructive) { client.send(CVM.stopAll) } label: {
+                    Button { client.cancelAllMoves(); client.send(CVM.retract) } label: { Label("Retract All (Home)", systemImage: "house") }
+                    Button(role: .destructive) { client.cancelAllMoves(); client.send(CVM.stopAll) } label: {
                         Label("STOP ALL", systemImage: "stop.fill")
                     }
                     .tint(.red)
@@ -137,13 +153,13 @@ struct ContentView: View {
     private func motorCard(_ id: Int, _ name: String) -> some View {
         VStack(spacing: 8) {
             Text("Channel \(name)").font(.subheadline.bold())
-            Button { client.send(CVM.up(id)) } label: {
+            Button { client.cancelMove(id); client.send(CVM.up(id)) } label: {
                 Image(systemName: "arrow.up").frame(maxWidth: .infinity, minHeight: 24)
             }
-            Button { client.send(CVM.stop(id)) } label: {
+            Button { client.cancelMove(id); client.send(CVM.stop(id)) } label: {
                 Image(systemName: "stop.fill").frame(maxWidth: .infinity, minHeight: 24)
             }
-            Button { client.send(CVM.down(id)) } label: {
+            Button { client.cancelMove(id); client.send(CVM.down(id)) } label: {
                 Image(systemName: "arrow.down").frame(maxWidth: .infinity, minHeight: 24)
             }
             Divider()
@@ -151,10 +167,37 @@ struct ContentView: View {
                 .font(.title3.monospacedDigit())
             Button("Query") { client.send(CVM.queryPosition(id)) }
                 .controlSize(.small)
+            Divider()
+            HStack(spacing: 4) {
+                TextField("0–100", text: Binding(get: { targets[id] ?? "" }, set: { targets[id] = $0 }))
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 50)
+                    .onSubmit { goTo(id) }
+                Text("%")
+                if client.moveTargets[id] != nil {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Go") { goTo(id) }
+                        .disabled(targetValue(id) == nil)
+                }
+            }
+            .help("Move channel \(name) directly to this position (0–100%)")
         }
         .padding(10)
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
+    }
+
+    private func targetValue(_ id: Int) -> Double? {
+        guard let t = targets[id]?.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "%", with: ""),
+              let v = Double(t), (0...100).contains(v) else { return nil }
+        return v
+    }
+
+    private func goTo(_ id: Int) {
+        guard let v = targetValue(id) else { return }
+        client.goTo(id, v)
     }
 
     // MARK: Presets
@@ -171,7 +214,7 @@ struct ContentView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
                     ForEach(1...24, id: \.self) { p in
                         Button {
-                            if storeMode { pendingStore = p } else { client.send(CVM.recall(p)) }
+                            if storeMode { pendingStore = p } else { client.cancelAllMoves(); client.send(CVM.recall(p)) }
                         } label: {
                             Text("\(p)").font(.body.monospacedDigit().bold())
                                 .frame(maxWidth: .infinity, minHeight: 28)
