@@ -2,6 +2,10 @@
 
 A native macOS app for controlling a Stewart Filmscreen CVM masking/screen controller over Telnet (IP).
 
+> **Use at your own risk.** This app moves motorised screens and masking directly — make sure the
+> screen and masking are clear before operating. Not affiliated with or endorsed by Stewart Filmscreen
+> or Converging Systems.
+
 ## Features
 - IP address, port (default 23), and Telnet login (auto-sent when prompted); settings are remembered
 - Keepalive while idle and automatic reconnect if the CVM drops the session
@@ -43,3 +47,7 @@ From the Stewart CVM Owners Manual, page 14:
 | `#1.1.0.MOTOR=RETRACT;` | All motors to Home |
 | `#1.1.N.MOTOR.POSITION=?;` | Query channel N position (%) |
 | `#1.1.N.MOTOR=GOTO,P;` | Move channel N to P % (0–100) — *not in the manual; verified on a CVM* |
+
+## License
+[MIT](LICENSE). Provided "as is", without warranty of any kind; the authors accept no liability for
+its use.
